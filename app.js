@@ -8,6 +8,13 @@ const STATUS = {
   publikovano: "Zveřejněno",
 };
 const FORMATS = ["Reel", "Post", "Story", "Karusel", "Jiné"];
+const APPROVAL = { neovereno: "Neověřeno", schvaleno: "Schváleno", zamitnuto: "Zamítnuto" };
+const APPROVAL_MARK = { neovereno: "…", schvaleno: "✓", zamitnuto: "✕" };
+const MODE = { manual: "Ručně", planned: "Naplánováno ve FB", auto: "Auto-post" };
+const PLAT = { ig: "Instagram", fb: "Facebook", yt: "YouTube" };
+const ap = (p) => p.approval || "neovereno";
+const md = (p) => p.mode || "manual";
+const tagsHtml = (p) => `<span class="tags"><span class="tag ap-${ap(p)}">${APPROVAL[ap(p)]}</span><span class="tag md-${md(p)}">${MODE[md(p)]}</span></span>`;
 const MONTHS = ["leden", "únor", "březen", "duben", "květen", "červen", "červenec", "srpen", "září", "říjen", "listopad", "prosinec"];
 const DOW = ["Po", "Út", "St", "Čt", "Pá", "So", "Ne"];
 const LS_KEY = "tarus-planovac-v1";
@@ -176,13 +183,13 @@ function render() {
 
 const pill = (s) => `<span class="pill st-${s}">${STATUS[s] || s}</span>`;
 const sorted = (l) => [...l].sort((a, b) => (a.date || "9999").localeCompare(b.date || "9999"));
-const meta = (p) => [p.format, (p.platforms || []).map((x) => (x === "ig" ? "Instagram" : "Facebook")).join(" + ")].filter(Boolean).join(" · ");
+const meta = (p) => [p.format, (p.platforms || []).map((x) => PLAT[x] || x).join(" + ")].filter(Boolean).join(" · ");
 
 function rowHtml(p, today) {
   const over = p.date && p.date < today && p.status !== "publikovano";
   return `<div class="row" data-id="${p.id}" tabindex="0" role="button">
     <span class="d ${over ? "over" : ""}">${fmtDate(p.date)}</span>
-    <span class="t">${esc(p.title)}<small>${esc(meta(p))}</small></span>
+    <span class="t">${esc(p.title)}<small>${esc(meta(p))}</small>${tagsHtml(p)}</span>
     ${pill(p.status)}
   </div>`;
 }
@@ -207,6 +214,7 @@ function renderOverview() {
       <div class="stat"><b>${count("napad")}</b><span>nápadů</span></div>
       <div class="stat"><b>${count("pripravuje") + count("pripraveno")}</b><span>v přípravě</span></div>
       <div class="stat"><b>${month}</b><span>v tomto měsíci</span></div>
+      <div class="stat"><b>${posts.filter((p) => p.status !== "publikovano" && ap(p) === "neovereno").length}</b><span>čeká na schválení</span></div>
       <div class="stat ${overdue ? "bad" : ""}"><b>${overdue}</b><span>po termínu</span></div>
       <div class="stat"><b>${count("publikovano")}</b><span>zveřejněno</span></div>
     </div>
@@ -234,7 +242,7 @@ function renderCalendar() {
     const items = posts.filter((p) => p.date === k);
     cells += `<div class="day ${d.getMonth() !== cur.m ? "out" : ""} ${k === today ? "today" : ""}" data-date="${k}">
       <span class="n">${d.getDate()}</span>
-      ${items.map((p) => `<button class="chip st-${p.status}" data-id="${p.id}" title="${esc(p.title)}"><span>${esc(p.title)}</span></button>`).join("")}
+      ${items.map((p) => `<button class="chip st-${p.status}" data-id="${p.id}" title="${esc(p.title)}"><span>${APPROVAL_MARK[ap(p)]} ${esc(p.title)}</span></button>`).join("")}
     </div>`;
   }
   el.innerHTML = `
@@ -257,6 +265,7 @@ function renderBoard() {
       ${items.map((p) => `<div class="card" data-id="${p.id}" tabindex="0" role="button">
         <strong>${grip}${esc(p.title)}</strong>
         <div class="meta"><span>${fmtDate(p.date)}</span><span>${esc(meta(p))}</span>${(p.comments || []).length ? `<span>💬 ${p.comments.length}</span>` : ""}</div>
+        ${tagsHtml(p)}
       </div>`).join("") || '<p class="muted">Prázdné</p>'}
     </div>`;
   }).join("")}</div>`;
@@ -357,7 +366,7 @@ function openPost(p, date) {
   const owner = role === "owner";
   const canEdit = owner;                       // editor jen přidává nové a komentuje
   const canFill = owner || isNew;
-  const d = p || { title: "", format: "Reel", platforms: ["ig", "fb"], date: date || "", status: "napad", caption: "", note: "", comments: [] };
+  const d = p || { title: "", format: "Reel", platforms: ["ig", "fb"], date: date || "", status: "napad", approval: "neovereno", mode: "manual", captionIg: "", captionFb: "", captionYt: "", note: "", comments: [] };
   const f = $("#postForm");
   const ro = !canFill;
   f.innerHTML = `
@@ -371,16 +380,23 @@ function openPost(p, date) {
       <div><label for="f-date">Datum zveřejnění</label>
         ${ro ? `<div class="ro">${fmtDate(d.date)}</div>` : `<input id="f-date" type="date" value="${d.date || ""}">`}</div>
     </div>
+    <div><label>Kde</label>
+      ${ro ? `<div class="ro">${esc(meta(d))}</div>` : `<div class="checks">${Object.entries(PLAT).map(([k, v]) => `<label><input type="checkbox" id="f-${k}" ${(d.platforms || []).includes(k) ? "checked" : ""}> ${v}</label>`).join("")}</div>`}</div>
     <div class="grid2">
-      <div><label>Kde</label>
-        ${ro ? `<div class="ro">${esc(meta(d))}</div>` : `<div class="checks">
-          <label><input type="checkbox" id="f-ig" ${(d.platforms || []).includes("ig") ? "checked" : ""}> Instagram</label>
-          <label><input type="checkbox" id="f-fb" ${(d.platforms || []).includes("fb") ? "checked" : ""}> Facebook</label></div>`}</div>
       <div><label for="f-status">Stav</label>
         ${owner ? `<select id="f-status">${Object.entries(STATUS).map(([k, v]) => `<option value="${k}" ${k === d.status ? "selected" : ""}>${v}</option>`).join("")}</select>` : `<div class="ro">${STATUS[d.status]}</div>`}</div>
+      <div><label for="f-approval">Schválení (Robert)</label>
+        ${owner ? `<select id="f-approval">${Object.entries(APPROVAL).map(([k, v]) => `<option value="${k}" ${k === ap(d) ? "selected" : ""}>${v}</option>`).join("")}</select>` : `<div class="ro">${APPROVAL[ap(d)]}</div>`}</div>
     </div>
-    <div><label for="f-caption">Text příspěvku</label>
-      ${ro ? `<div class="ro">${esc(d.caption)}</div>` : `<textarea id="f-caption">${esc(d.caption)}</textarea>`}</div>
+    <div><label for="f-mode">Způsob zveřejnění</label>
+      ${owner ? `<select id="f-mode">${Object.entries(MODE).map(([k, v]) => `<option value="${k}" ${k === md(d) ? "selected" : ""}>${v}</option>`).join("")}</select>` : `<div class="ro">${MODE[md(d)]}</div>`}</div>
+    <div class="caps"><label>Texty příspěvku</label>
+      ${[["captionIg", "Instagram"], ["captionFb", "Facebook"], ["captionYt", "YouTube"]].map(([k, l]) => {
+        const v = d[k] || "";
+        return `<details class="cap"><summary>${l} <small class="muted">${v ? v.length + " znaků" : "prázdné"}</small></summary>
+          ${ro ? `<div class="ro" id="f-${k}">${esc(v)}</div>` : `<textarea id="f-${k}" rows="9">${esc(v)}</textarea>`}
+          <button type="button" class="btn" data-copy="f-${k}">Zkopírovat text</button></details>`;
+      }).join("")}</div>
     <div><label for="f-note">Poznámky a nápady</label>
       ${ro ? `<div class="ro">${esc(d.note)}</div>` : `<textarea id="f-note">${esc(d.note)}</textarea>`}</div>
     ${!isNew ? `<div class="comments"><h3>Komentáře</h3>
@@ -396,19 +412,35 @@ function openPost(p, date) {
   const close = () => dlg.close();
   $("#closeDlg").onclick = close;
   $("#cancelBtn").onclick = close;
+  f.querySelectorAll("[data-copy]").forEach((b) => {
+    b.onclick = async () => {
+      const el = $("#" + b.dataset.copy);
+      const text = el.value ?? el.textContent;
+      try { await navigator.clipboard.writeText(text); toast("Text zkopírován"); }
+      catch {
+        const det = b.closest("details");
+        el.focus?.();
+        const r = document.createRange(); r.selectNodeContents(el);
+        if (el.select) el.select(); else { const s = getSelection(); s.removeAllRanges(); s.addRange(r); }
+        toast("Text označen, zkopíruj ho Ctrl+C");
+      }
+    };
+  });
 
   f.onsubmit = async (e) => {
     e.preventDefault();
-    const platforms = [];
-    if ($("#f-ig")?.checked) platforms.push("ig");
-    if ($("#f-fb")?.checked) platforms.push("fb");
+    const platforms = Object.keys(PLAT).filter((k) => $("#f-" + k)?.checked);
     const data = {
       title: $("#f-title").value.trim(),
       format: $("#f-format").value,
       date: $("#f-date").value || "",
       platforms,
       status: owner ? $("#f-status").value : "napad",
-      caption: $("#f-caption").value,
+      approval: owner ? $("#f-approval").value : "neovereno",
+      mode: owner ? $("#f-mode").value : "manual",
+      captionIg: $("#f-captionIg").value,
+      captionFb: $("#f-captionFb").value,
+      captionYt: $("#f-captionYt").value,
       note: $("#f-note").value,
     };
     if (!data.title) return;
