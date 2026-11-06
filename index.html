@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#10171b">
+<title>TARUS Plánovač</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<section id="login" hidden>
+  <form id="loginForm" class="login-card" autocomplete="on">
+    <div class="brand"><span class="logo">T</span><span>TARUS Plánovač</span></div>
+    <p class="muted">Soukromý panel pro správu sociálních sítí.</p>
+    <label for="email">E-mail</label>
+    <input id="email" type="email" autocomplete="username" required>
+    <label for="password">Heslo</label>
+    <input id="password" type="password" autocomplete="current-password" required>
+    <p id="loginError" class="error" role="alert"></p>
+    <button class="btn primary" type="submit">Přihlásit se</button>
+  </form>
+</section>
+
+<div id="app" hidden>
+  <header class="top">
+    <div class="brand"><span class="logo">T</span><span>TARUS Plánovač</span></div>
+    <nav class="tabs" id="tabs">
+      <button data-view="prehled" class="on">Přehled</button>
+      <button data-view="kalendar">Kalendář</button>
+      <button data-view="napady">Nápady</button>
+    </nav>
+    <div class="top-right">
+      <span id="modeBadge" class="badge"></span>
+      <button class="btn" id="newBtn">+ Nový</button>
+      <button class="btn ghost" id="menuBtn" aria-label="Nabídka">⋯</button>
+      <div id="menu" class="menu" hidden>
+        <button id="exportBtn">Stáhnout zálohu (JSON)</button>
+        <label class="menu-item" for="importFile">Obnovit ze zálohy</label>
+        <input id="importFile" type="file" accept="application/json" hidden>
+        <button id="logoutBtn">Odhlásit se</button>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section id="v-prehled" class="view"></section>
+    <section id="v-kalendar" class="view" hidden></section>
+    <section id="v-napady" class="view" hidden></section>
+  </main>
+</div>
+
+<dialog id="dlg">
+  <form id="postForm" method="dialog"></form>
+</dialog>
+
+<div id="toast" class="toast" role="status"></div>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>

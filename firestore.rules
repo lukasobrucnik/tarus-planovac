@@ -1,0 +1,33 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function role() {
+      return exists(/databases/$(database)/documents/roles/$(request.auth.uid))
+        ? get(/databases/$(database)/documents/roles/$(request.auth.uid)).data.role
+        : "none";
+    }
+
+    // Role se zakládají jen ručně v konzoli. Uživatel smí přečíst jen svou.
+    match /roles/{uid} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow write: if false;
+    }
+
+    match /posts/{id} {
+      // Majitel smí všechno.
+      allow read, write: if request.auth != null && role() == "owner";
+
+      // Robert (role "editor"): čte, přidává nové nápady a dopisuje komentáře.
+      // Nemůže mazat ani upravovat cizí texty.
+      allow read: if request.auth != null && role() == "editor";
+      allow create: if request.auth != null && role() == "editor"
+        && request.resource.data.status == "napad"
+        && request.resource.data.createdBy == request.auth.uid;
+      allow update: if request.auth != null && role() == "editor"
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["comments"])
+        && request.resource.data.comments.size() >= resource.data.comments.size();
+      allow delete: if false;
+    }
+  }
+}
