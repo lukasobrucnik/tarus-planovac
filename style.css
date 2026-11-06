@@ -124,8 +124,12 @@ main { max-width: 1100px; margin: 22px auto 0; }
 body.is-dragging, body.is-dragging * { cursor: grabbing !important; }
 .tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
 .tag { font-size: 11px; font-weight: 600; padding: 1px 8px; border-radius: 99px; background: var(--surface-2); white-space: nowrap; }
-.ap-schvaleno { color: var(--ok); } .ap-zamitnuto { color: var(--bad); } .ap-neovereno { color: var(--warn); }
-.md-planned { color: var(--blue); } .md-auto { color: var(--s-napad); } .md-manual { color: var(--muted); }
+.ap-schvaleno { color: var(--ok); }
+.okbox, .okline { display: inline-flex; gap: 6px; align-items: center; font-size: 12px; font-weight: 600; color: var(--muted); margin: 0; cursor: pointer; }
+.okline { font-size: 14px; color: var(--ink); padding-top: 8px; }
+.okbox input, .okline input { width: auto; margin: 0; accent-color: var(--ok); }
+.hint { padding: 0 4px; margin-top: -6px; }
+.cap summary small { font-weight: 400; margin-left: 6px; }
 .caps { display: grid; gap: 6px; }
 .cap { border: 1px solid var(--line); border-radius: 8px; padding: 0 12px; }
 .cap summary { cursor: pointer; padding: 9px 0; font-weight: 600; font-size: 14px; }

@@ -8,13 +8,16 @@ const STATUS = {
   publikovano: "Zveřejněno",
 };
 const FORMATS = ["Reel", "Post", "Story", "Karusel", "Jiné"];
-const APPROVAL = { neovereno: "Neověřeno", schvaleno: "Schváleno", zamitnuto: "Zamítnuto" };
-const APPROVAL_MARK = { neovereno: "…", schvaleno: "✓", zamitnuto: "✕" };
-const MODE = { manual: "Ručně", planned: "Naplánováno ve FB", auto: "Auto-post" };
+// Připraveno = ještě není ve Facebook plánovači, Zveřejněno = už v něm je.
+const STATUS_HINT = { pripraveno: "ještě není ve FB plánovači", publikovano: "je ve FB plánovači" };
 const PLAT = { ig: "Instagram", fb: "Facebook", yt: "YouTube" };
-const ap = (p) => p.approval || "neovereno";
-const md = (p) => p.mode || "manual";
-const tagsHtml = (p) => `<span class="tags"><span class="tag ap-${ap(p)}">${APPROVAL[ap(p)]}</span><span class="tag md-${md(p)}">${MODE[md(p)]}</span></span>`;
+const isOk = (p) => (p.approved !== undefined ? p.approved === true : p.approval === "schvaleno"); // schváleno Robertem
+// Majitel vidí zaškrtávátko přímo na kartě, ostatní jen štítek.
+const tagsHtml = (p) => `<span class="tags">${
+  role === "owner"
+    ? `<label class="okbox"><input type="checkbox" data-ok="${p.id}" ${isOk(p) ? "checked" : ""}> Schváleno Robertem</label>`
+    : isOk(p) ? '<span class="tag ap-schvaleno">Schváleno Robertem</span>' : ""
+}</span>`;
 const MONTHS = ["leden", "únor", "březen", "duben", "květen", "červen", "červenec", "srpen", "září", "říjen", "listopad", "prosinec"];
 const DOW = ["Po", "Út", "St", "Čt", "Pá", "So", "Ne"];
 const LS_KEY = "tarus-planovac-v1";
@@ -214,7 +217,7 @@ function renderOverview() {
       <div class="stat"><b>${count("napad")}</b><span>nápadů</span></div>
       <div class="stat"><b>${count("pripravuje") + count("pripraveno")}</b><span>v přípravě</span></div>
       <div class="stat"><b>${month}</b><span>v tomto měsíci</span></div>
-      <div class="stat"><b>${posts.filter((p) => p.status !== "publikovano" && ap(p) === "neovereno").length}</b><span>čeká na schválení</span></div>
+      <div class="stat"><b>${posts.filter((p) => p.status !== "publikovano" && !isOk(p)).length}</b><span>čeká na Roberta</span></div>
       <div class="stat ${overdue ? "bad" : ""}"><b>${overdue}</b><span>po termínu</span></div>
       <div class="stat"><b>${count("publikovano")}</b><span>zveřejněno</span></div>
     </div>
@@ -242,7 +245,7 @@ function renderCalendar() {
     const items = posts.filter((p) => p.date === k);
     cells += `<div class="day ${d.getMonth() !== cur.m ? "out" : ""} ${k === today ? "today" : ""}" data-date="${k}">
       <span class="n">${d.getDate()}</span>
-      ${items.map((p) => `<button class="chip st-${p.status}" data-id="${p.id}" title="${esc(p.title)}"><span>${APPROVAL_MARK[ap(p)]} ${esc(p.title)}</span></button>`).join("")}
+      ${items.map((p) => `<button class="chip st-${p.status}" data-id="${p.id}" title="${esc(p.title)}"><span>${isOk(p) ? "✓ " : ""}${esc(p.title)}</span></button>`).join("")}
     </div>`;
   }
   el.innerHTML = `
@@ -261,7 +264,7 @@ function renderBoard() {
   const grip = role === "owner" ? `<span class="grip" title="Přetáhni do jiného sloupce" aria-hidden="true">⠿</span>` : "";
   el.innerHTML = `<div class="board">${Object.keys(STATUS).map((s) => {
     const items = sorted(posts.filter((p) => p.status === s));
-    return `<div class="col" data-status="${s}"><h3><span class="st-${s}">${STATUS[s]}</span><span class="muted">${items.length}</span></h3>
+    return `<div class="col" data-status="${s}"><h3><span class="st-${s}">${STATUS[s]}</span><span class="muted">${items.length}</span></h3>${STATUS_HINT[s] ? `<small class="muted hint">${STATUS_HINT[s]}</small>` : ""}
       ${items.map((p) => `<div class="card" data-id="${p.id}" tabindex="0" role="button">
         <strong>${grip}${esc(p.title)}</strong>
         <div class="meta"><span>${fmtDate(p.date)}</span><span>${esc(meta(p))}</span>${(p.comments || []).length ? `<span>💬 ${p.comments.length}</span>` : ""}</div>
@@ -336,8 +339,14 @@ document.addEventListener("pointerup", async (e) => {
 document.addEventListener("pointercancel", endDrag);
 
 /* delegace kliků v pohledech */
+document.addEventListener("change", async (e) => {
+  const box = e.target.closest("input[data-ok]");
+  if (!box) return;
+  try { await store.update(box.dataset.ok, { approved: box.checked }); toast(box.checked ? "Schváleno Robertem" : "Schválení zrušeno"); }
+  catch (err) { box.checked = !box.checked; toast("Uložení se nepovedlo: " + (err.code || err.message)); }
+});
 document.addEventListener("click", (e) => {
-  if (justDragged) return;
+  if (justDragged || e.target.closest(".okbox")) return;
   const act = e.target.closest("[data-act]")?.dataset.act;
   if (act === "seed") return seed();
   if (act === "new") return openPost();
@@ -366,7 +375,7 @@ function openPost(p, date) {
   const owner = role === "owner";
   const canEdit = owner;                       // editor jen přidává nové a komentuje
   const canFill = owner || isNew;
-  const d = p || { title: "", format: "Reel", platforms: ["ig", "fb"], date: date || "", status: "napad", approval: "neovereno", mode: "manual", captionIg: "", captionFb: "", captionYt: "", note: "", comments: [] };
+  const d = p || { title: "", format: "Reel", platforms: ["ig", "fb"], date: date || "", status: "napad", approved: false, captionIg: "", captionFb: "", captionYt: "", note: "", comments: [] };
   const f = $("#postForm");
   const ro = !canFill;
   f.innerHTML = `
@@ -384,16 +393,15 @@ function openPost(p, date) {
       ${ro ? `<div class="ro">${esc(meta(d))}</div>` : `<div class="checks">${Object.entries(PLAT).map(([k, v]) => `<label><input type="checkbox" id="f-${k}" ${(d.platforms || []).includes(k) ? "checked" : ""}> ${v}</label>`).join("")}</div>`}</div>
     <div class="grid2">
       <div><label for="f-status">Stav</label>
-        ${owner ? `<select id="f-status">${Object.entries(STATUS).map(([k, v]) => `<option value="${k}" ${k === d.status ? "selected" : ""}>${v}</option>`).join("")}</select>` : `<div class="ro">${STATUS[d.status]}</div>`}</div>
-      <div><label for="f-approval">Schválení (Robert)</label>
-        ${owner ? `<select id="f-approval">${Object.entries(APPROVAL).map(([k, v]) => `<option value="${k}" ${k === ap(d) ? "selected" : ""}>${v}</option>`).join("")}</select>` : `<div class="ro">${APPROVAL[ap(d)]}</div>`}</div>
+        ${owner ? `<select id="f-status">${Object.entries(STATUS).map(([k, v]) => `<option value="${k}" ${k === d.status ? "selected" : ""}>${v}${STATUS_HINT[k] ? " (" + STATUS_HINT[k] + ")" : ""}</option>`).join("")}</select>` : `<div class="ro">${STATUS[d.status]}</div>`}</div>
+      <div><label>Robert</label>
+        ${owner ? `<label class="okline"><input type="checkbox" id="f-approved" ${isOk(d) ? "checked" : ""}> Schváleno Robertem</label>` : `<div class="ro">${isOk(d) ? "Schváleno" : "Zatím neschváleno"}</div>`}</div>
     </div>
-    <div><label for="f-mode">Způsob zveřejnění</label>
-      ${owner ? `<select id="f-mode">${Object.entries(MODE).map(([k, v]) => `<option value="${k}" ${k === md(d) ? "selected" : ""}>${v}</option>`).join("")}</select>` : `<div class="ro">${MODE[md(d)]}</div>`}</div>
     <div class="caps"><label>Texty příspěvku</label>
       ${[["captionIg", "Instagram"], ["captionFb", "Facebook"], ["captionYt", "YouTube"]].map(([k, l]) => {
         const v = d[k] || "";
-        return `<details class="cap"><summary>${l} <small class="muted">${v ? v.length + " znaků" : "prázdné"}</small></summary>
+        const prev = v ? esc(v.replace(/\s+/g, " ").slice(0, 70)) + (v.length > 70 ? "…" : "") : "zatím bez textu";
+        return `<details class="cap"><summary>${l} <small class="muted">${prev}</small></summary>
           ${ro ? `<div class="ro" id="f-${k}">${esc(v)}</div>` : `<textarea id="f-${k}" rows="9">${esc(v)}</textarea>`}
           <button type="button" class="btn" data-copy="f-${k}">Zkopírovat text</button></details>`;
       }).join("")}</div>
@@ -436,8 +444,7 @@ function openPost(p, date) {
       date: $("#f-date").value || "",
       platforms,
       status: owner ? $("#f-status").value : "napad",
-      approval: owner ? $("#f-approval").value : "neovereno",
-      mode: owner ? $("#f-mode").value : "manual",
+      approved: owner ? $("#f-approved").checked : false,
       captionIg: $("#f-captionIg").value,
       captionFb: $("#f-captionFb").value,
       captionYt: $("#f-captionYt").value,
